@@ -8,6 +8,12 @@ from urllib.parse import urlparse
 from urllib.request import urlretrieve
 import venv
 
+# run pip from the module
+from pip.commands import commands_dict
+from pip import parseopts
+from pip import check_isolated, deprecation, locale
+
+
 class ExtendedEnvBuilder(venv.EnvBuilder):
     """
     This builder installs setuptools and pip so that you can pip or
@@ -37,7 +43,11 @@ class ExtendedEnvBuilder(venv.EnvBuilder):
         self.nopip = kwargs.pop('nopip', False)
         self.progress = kwargs.pop('progress', None)
         self.verbose = kwargs.pop('verbose', False)
+        # osic specific:
+        self.openrc = kwargs.pop('openrc', None)
+        self.requirements = kwargs.pop('requirements', None)
         super().__init__(*args, **kwargs)
+
 
     def post_setup(self, context):
         """
@@ -47,12 +57,43 @@ class ExtendedEnvBuilder(venv.EnvBuilder):
         :param context: The information for the virtual environment
                         creation request being processed.
         """
+        # add openrc to activation;
+        # add pip-installation of openstack (or update, in case it's there)
+        # add any requirements options installations too;
         os.environ['VIRTUAL_ENV'] = context.env_dir
         if not self.nodist:
             self.install_setuptools(context)
         # Can't install pip without setuptools
         if not self.nopip and not self.nodist:
             self.install_pip(context)
+
+        # setup pip for use, as pip.main() (mostly) does:
+        deprecation.install_warning_logger()
+        locale.setlocale(locale.LC_ALL, '')
+
+        # -t option doesn't work on 2.7 or 3.5 - but does on 3.6;
+        # --prefix has to be told to ignore existing libraries in path;
+        #  *sigh*
+        self.pip_install(context,
+                 "install -I --prefix {} python-openstackclient".format(context.env_dir))
+        '''
+        self.pip_install(context,
+                 "install -t {} -U python-openstackclient"
+                 .format(os.path.join(context.env_dir, "lib",
+                                      context.python_exe, "site_packages")))
+         '''
+
+
+    def pip_install(self, context, args):
+        # we need to use the new system path for pip.
+
+        cmd_name, cmd_args = parseopts(args.split())
+        command = commands_dict[cmd_name](isolated=check_isolated(cmd_args))
+        rtn = command.main(cmd_args)
+        #  if self.requirements, then run pip on "-r "+self.requirements
+
+
+
 
     def reader(self, stream, context):
         """
@@ -152,7 +193,7 @@ def main(args=None):
                                                      'more target '
                                                      'directories.')
         parser.add_argument('dirs', metavar='ENV_DIR', nargs='+',
-                            help='A directory in which to create the
+                            help='A directory in which to create the '
                                  'virtual environment.')
         # add openrc path/file here:
         #  - and require it
@@ -169,6 +210,22 @@ def main(args=None):
                             action='store_true', dest='system_site',
                             help='Give the virtual environment access to the '
                                  'system site-packages dir.')
+        ## osic-venv:
+        # if option not specified,
+        #   try ~/.config/openstack/openrc.sh
+        # if option specified w/o filename,
+        #   try ./openrc
+        parser.add_argument('-O', '--openrc', nargs='?',
+                            const=os.path.join('.', 'openrc'),
+                            default=os.path.join(
+                                os.environ['HOME'], '.config', 'openstack', 'openrc.sh'),
+                            help='path to OpenStack openrc file, ("./openrc" by default); '
+                                 '"~/.config/openstack/openrc.sh" '
+                                 'if option not specified')
+        parser.add_argument('-r', '--requirements', nargs='?', # type=argparse.FileType('r'),
+                            const='requirements.txt',
+                            help='pip requirements file for installation '
+                                 '(default: "requirements.txt")')
         if os.name == 'nt':
             use_symlinks = False
         else:
@@ -198,13 +255,16 @@ def main(args=None):
         options = parser.parse_args(args)
         if options.upgrade and options.clear:
             raise ValueError('you cannot supply --upgrade and --clear together.')
-        builder = ExtendedEnvBuilder(system_site_packages=options.system_site,
-                                       clear=options.clear,
-                                       symlinks=options.symlinks,
-                                       upgrade=options.upgrade,
-                                       nodist=options.nodist,
-                                       nopip=options.nopip,
-                                       verbose=options.verbose)
+        builder = ExtendedEnvBuilder(
+                                    openrc=options.openrc,
+                                    requirements=options.requirements,
+                                    system_site_packages=options.system_site,
+                                    clear=options.clear,
+                                    symlinks=options.symlinks,
+                                    upgrade=options.upgrade,
+                                    nodist=options.nodist,
+                                    nopip=options.nopip,
+                                    verbose=options.verbose)
         for d in options.dirs:
             builder.create(d)
 
