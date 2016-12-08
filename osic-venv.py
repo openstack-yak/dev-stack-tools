@@ -8,11 +8,15 @@ from urllib.parse import urlparse
 from urllib.request import urlretrieve
 import venv
 
+# for openrc setup:
+import shutil
+from glob import glob
 # run pip from the module
 from pip.commands import commands_dict
 from pip import parseopts
 from pip import check_isolated, deprecation, locale
 
+OPENRC = "openrc"  # default filename
 
 class ExtendedEnvBuilder(venv.EnvBuilder):
     """
@@ -44,8 +48,15 @@ class ExtendedEnvBuilder(venv.EnvBuilder):
         self.progress = kwargs.pop('progress', None)
         self.verbose = kwargs.pop('verbose', False)
         # osic specific:
-        self.openrc = kwargs.pop('openrc', None)
         self.requirements = kwargs.pop('requirements', None)
+        self.openrc = kwargs.pop('openrc', None)
+        if self.openrc:
+            # check (early) that it is accessible:
+            if not os.access(self.openrc, os.R_OK):
+                raise Warning('Couldn\'t find "{}" '.format(self.openrc) +
+                        'Either have a default "openrc.sh" file '
+                        'in "~/.config/openstack" or specify a path '
+                        'for one with the --openrc option')
         super().__init__(*args, **kwargs)
 
 
@@ -57,9 +68,6 @@ class ExtendedEnvBuilder(venv.EnvBuilder):
         :param context: The information for the virtual environment
                         creation request being processed.
         """
-        # add openrc to activation;
-        # add pip-installation of openstack (or update, in case it's there)
-        # add any requirements options installations too;
         os.environ['VIRTUAL_ENV'] = context.env_dir
         if not self.nodist:
             self.install_setuptools(context)
@@ -67,32 +75,42 @@ class ExtendedEnvBuilder(venv.EnvBuilder):
         if not self.nopip and not self.nodist:
             self.install_pip(context)
 
+        ## add openrc to activation;
+        if self.openrc:    # options set to guarentee this is set
+            # copy self.openrc to bin directory
+            openrc_dest = os.path.join(context.env_dir, 'bin', OPENRC)
+            shutil.copyfile(self.openrc, openrc_dest)
+            # append  "source openrc" to activate scripts
+            for fn in glob(os.path.join(context.env_dir, 'bin', 'activate*')):
+                cmd = '.' if fn[-4:] == 'fish' else 'source'
+                print("updating {}: {} {} ...".format(fn, cmd, OPENRC), file=sys.stderr) 
+                with open(fn, 'a') as f:
+                    f.write('{} {}\n'.format(cmd, OPENRC))
+
+        ## add pip-installation of openstack (or update, in case it's there)
         # setup pip for use, as pip.main() (mostly) does:
         deprecation.install_warning_logger()
         locale.setlocale(locale.LC_ALL, '')
 
-        # -t option doesn't work on 2.7 or 3.5 - but does on 3.6;
         # --prefix has to be told to ignore existing libraries in path;
-        #  *sigh*
-        self.pip_install(context,
-                 "install -I --prefix {} python-openstackclient".format(context.env_dir))
+        self.pip("install -I --prefix {} python-openstackclient"
+                .format(context.env_dir))
         '''
-        self.pip_install(context,
-                 "install -t {} -U python-openstackclient"
+        # -t option doesn't work on 2.7 or 3.5 - but does on 3.6;
+        self.pip("install -t {} -U python-openstackclient"
                  .format(os.path.join(context.env_dir, "lib",
                                       context.python_exe, "site_packages")))
          '''
+        ## add any requirements options installations too;
+        if self.requirements:
+            self.pip( "install -I --prefix {} -r {}"
+                    .format( context.env_dir, self.requirements))
 
 
-    def pip_install(self, context, args):
-        # we need to use the new system path for pip.
-
+    def pip(self, args):
         cmd_name, cmd_args = parseopts(args.split())
         command = commands_dict[cmd_name](isolated=check_isolated(cmd_args))
         rtn = command.main(cmd_args)
-        #  if self.requirements, then run pip on "-r "+self.requirements
-
-
 
 
     def reader(self, stream, context):
@@ -195,9 +213,6 @@ def main(args=None):
         parser.add_argument('dirs', metavar='ENV_DIR', nargs='+',
                             help='A directory in which to create the '
                                  'virtual environment.')
-        # add openrc path/file here:
-        #  - and require it
-
         parser.add_argument('--no-setuptools', default=False,
                             action='store_true', dest='nodist',
                             help="Don't install setuptools or pip in the "
@@ -216,10 +231,9 @@ def main(args=None):
         # if option specified w/o filename,
         #   try ./openrc
         parser.add_argument('-O', '--openrc', nargs='?',
-                            const=os.path.join('.', 'openrc'),
-                            default=os.path.join(
-                                os.environ['HOME'], '.config', 'openstack', 'openrc.sh'),
-                            help='path to OpenStack openrc file, ("./openrc" by default); '
+                            const=os.path.join('.', OPENRC),
+                            default=os.path.expanduser('~/.config/openstack/openrc.sh'),
+                            help='path to OpenStack openrc file, ("./'+OPENRC+'" by default); '
                                  '"~/.config/openstack/openrc.sh" '
                                  'if option not specified')
         parser.add_argument('-r', '--requirements', nargs='?', # type=argparse.FileType('r'),
