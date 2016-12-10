@@ -5,7 +5,9 @@
 A customized version of pyvenv, for openstack developers.
 Intended for developer station use (e.g. on your development laptop
 or workstation).
-Requires Python 3.4 or later.
+Requires Python 3.4 or later to run.
+You can specify a Python 2.7 interpreter for the openstack client
+environment (but there really is no need).
 
 *Warning:* This is a work in progress.
 
@@ -22,13 +24,13 @@ much of this is likely to evolve to address needs of cloud and cloud-application
 
 Use:
 
-    python osic-venv.py env/my-cloud-env
+    python3 osic-venv.py env/my-cloud-env
 
 will create a virtual environment, just as with `pyvenv`.
 
 Try:
 
-    python osic-venv.py -h
+    python3 osic-venv.py -h
     
 
 You can activate in the usual virtualenv way.
