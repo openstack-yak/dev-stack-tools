@@ -28,9 +28,10 @@ Use:
 
 will create a virtual environment, just as with `pyvenv`.
 
+You can also simply `chmod +x osic-env.py`, and run it directly.
 Try:
 
-    python3 osic-venv.py -h
+    osic-venv.py -h
     
 
 You can activate in the usual virtualenv way.
