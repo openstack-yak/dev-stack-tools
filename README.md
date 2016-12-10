@@ -1,4 +1,4 @@
-# Early release 0.0
+# Early release developer stack tools
 
 ## osic-venv.py
 
@@ -10,21 +10,26 @@ Requires Python 3.4 or later.
 *Warning:* This is a work in progress.
 
 - creates or updates a python virtualenv (it's a custom pyvenv);
-- includes openrc in the activation (*note:* given `clouds.yaml` evolution, this is likely to chang);
-  - you can specificy location and name of openrc
-  - if you specify the `--openrc` option without a filename, then "./openrc" is assumed;
-  - if you don't specify `--openrc` then ~/.config/openstack/openrc must exist;
+- includes openrc in the activation (*note:* given `clouds.yaml` evolution, this is likely to change);
+  - you can specificy location and name of `openrc`
+  - if `--openrc` option is given without a filename, then "./openrc" is assumed;
+  - if you don't specify `--openrc` then "~/.config/openstack/openrc" must exist;
 - localy installs `python-openstackclient` (i.e. `openstack` command line interface);
-- optionally, installs additional packages specified in a requirements file (like the `-r` option to `pip`);
+- optionally, installs additional packages specified in a requirements file (similar to the `-r` option of `pip`);
 
-Since openstack clients, and cloud-config are currently targetted at cloud operators,
+Since openstack clients and cloud-config are currently targeted at cloud operators,
 much of this is likely to evolve to address needs of cloud and cloud-application developers.
 
 Use:
 
     python osic-venv.py env/my-cloud-env
 
-will create a virtual environment, just as with pyvenv.
+will create a virtual environment, just as with `pyvenv`.
+
+Try:
+
+    python osic-venv.py -h
+    
 
 You can activate in the usual virtualenv way.
 A copy of your openrc file is copied into the venv bin path, and sourced
@@ -37,7 +42,7 @@ You may also find a shell script handy to activate (symmetric with `deactivate`)
         source "$*"/bin/activate
     }
 
-You could include this in your ~/.bash_login or ~/.bashrc file.
+You could include this in your `~/.bash_login` or `~/.bashrc` file.
 
 
 ## BUGS / Known Issues:
